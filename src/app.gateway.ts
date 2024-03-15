@@ -8,7 +8,7 @@ import { Player } from './Player';
 type LobbyPayload = {
   name: string;
   lobbyID: string;
-  userId?: string;
+  userID?: string;
 }
 
 @WebSocketGateway(3333, { cors: true })
@@ -33,7 +33,7 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
   handleCreateLobby(client: Socket, payload: LobbyPayload): void {
     const lobbyId = payload.lobbyID;
     const lobby = new Lobby(lobbyId);
-    const newPlayer = new Player(payload.name);
+    const newPlayer = new Player(payload.name, payload.userID);
     lobby.players.push(newPlayer);
     this.lobbies[lobbyId] = lobby;
     client.join(lobbyId);
@@ -50,18 +50,12 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     });
     mappedLobbies.map(lobby => {
       if(lobby.data.id === payload.lobbyID) {
-        const newPlayer = {
-          name: payload.name
-        }
+        const newPlayer = new Player(payload.name, payload.userID)
+        
         lobby.data.players.push(newPlayer);
         this.server.emit(`lobby_${payload.lobbyID}`, lobby.data);
-        this.server.emit(`xcode`, lobby.data);
+        this.server.emit(payload.userID, lobby.data);
       }
     })
-  }
-
-  @SubscribeMessage('connectedToLobby')
-  handleUserConnectedToLobby(client: Socket): void {
-
   }
 }
