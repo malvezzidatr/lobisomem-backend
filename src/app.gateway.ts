@@ -3,6 +3,13 @@ import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, SubscribeMessa
 import { Server, Socket } from 'socket.io';
 import { generateLobby } from './util';
 import { Lobby } from './lobby';
+import { Player } from './Player';
+
+type LobbyPayload = {
+  name: string;
+  lobbyID: string;
+  userId?: string;
+}
 
 @WebSocketGateway(3333, { cors: true })
 export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
@@ -19,37 +26,42 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
   }
 
   handleDisconnect(client: Socket) {
-    for (const lobbyId in this.lobbies) {
-      const lobby = this.lobbies[lobbyId];
-      if (lobby.players.includes(client.id)) {
-        // Remover o cliente da sala se ele estiver conectado a alguma sala
-        const index = lobby.players.indexOf(client.id);
-        lobby.players.splice(index, 1);
-        break;
-      }
-    }
     this.logger.log(`Client disconnected: ${client.id}`);
   }
 
   @SubscribeMessage(`createLobby`)
-  handleCreateLobby(client: Socket, teste: string): void {
-    const lobbyId = client.id + '_lobby';
-    const lobby = new Lobby(generateLobby());
-    lobby.players.push(client.id);
+  handleCreateLobby(client: Socket, payload: LobbyPayload): void {
+    const lobbyId = payload.lobbyID;
+    const lobby = new Lobby(lobbyId);
+    const newPlayer = new Player(payload.name);
+    lobby.players.push(newPlayer);
     this.lobbies[lobbyId] = lobby;
     client.join(lobbyId);
     client.emit('lobby', lobby);
-    console.log(teste)
-    this.server.emit(`lobby_${teste}`, lobby)
+    this.server.emit(`lobby_${payload.lobbyID}`, lobby)
   }
 
   @SubscribeMessage('connectToLobby')
-  handleConnectToLobby(client: Socket, lobbyId: string): void {
-    if (this.lobbies[lobbyId]) {
+  handleConnectToLobby(client: Socket, payload: LobbyPayload): void {
+    const mappedLobbies = Object.entries(this.lobbies).map(([lobbyId, lobby]) => {
+      return {
+          data: lobby
+      };
+    });
+    mappedLobbies.map(lobby => {
+      if(lobby.data.id === payload.lobbyID) {
+        const newPlayer = {
+          name: payload.name
+        }
+        lobby.data.players.push(newPlayer);
+        this.server.emit(`lobby_${payload.lobbyID}`, lobby.data);
+        this.server.emit(`xcode`, lobby.data);
+      }
+    })
+  }
 
-      this.lobbies[lobbyId].players.push(client.id);
-      client.join(lobbyId);
-      this.server.to(lobbyId).emit('lobby', this.lobbies[lobbyId]);
-    }
+  @SubscribeMessage('connectedToLobby')
+  handleUserConnectedToLobby(client: Socket): void {
+
   }
 }
