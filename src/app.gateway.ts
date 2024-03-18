@@ -1,8 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { generateLobby } from './util';
-import { Lobby } from './lobby';
+import { Lobby } from './Lobby';
 import { Player } from './Player';
 
 type LobbyPayload = {
@@ -12,22 +11,11 @@ type LobbyPayload = {
 }
 
 @WebSocketGateway(3333, { cors: true })
-export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class AppGateway {
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('AppGateway');
   private lobbies: { [lobbyId: string]: Lobby } = {};
 
-  afterInit(server: Server) {
-    this.logger.log('Init');
-  }
-
-  handleConnection(client: Socket) {
-    this.logger.log(`Client connected: ${client.id}`);
-  }
-
-  handleDisconnect(client: Socket) {
-    this.logger.log(`Client disconnected: ${client.id}`);
-  }
 
   @SubscribeMessage(`createLobby`)
   handleCreateLobby(client: Socket, payload: LobbyPayload): void {
@@ -38,6 +26,7 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
     this.lobbies[lobbyId] = lobby;
     client.join(lobbyId);
     client.emit('lobby', lobby);
+    this.logger.log(`Created a new lobby: Lobby ID - ${lobby.id} - Admin ID - ${newPlayer.userID}`)
     this.server.emit(`lobby_${payload.lobbyID}`, lobby)
   }
 
@@ -57,5 +46,11 @@ export class AppGateway implements OnGatewayInit, OnGatewayConnection, OnGateway
         this.server.emit(payload.userID, lobby.data);
       }
     })
+  }
+
+  @SubscribeMessage('disconnectFromLobby')
+  handleDisconnectFromLobby(client: Socket, payload: LobbyPayload): void {
+    this.lobbies[payload.lobbyID].players = this.lobbies[payload.lobbyID].players.filter(player => player.userID !== payload.userID)
+    this.server.emit(`lobby_${payload.lobbyID}`, this.lobbies[payload.lobbyID])
   }
 }

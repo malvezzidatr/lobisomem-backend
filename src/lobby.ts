@@ -1,10 +1,8 @@
-type player = {
-    name: string;
-}
+import { Player } from "./Player";
 
 export class Lobby {
     public id: string;
-    public players: player[] = [];
+    public players: Player[] = [];
 
     constructor(id: string) {
         this.id = id;
